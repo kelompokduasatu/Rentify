@@ -1,63 +1,14 @@
-name: Test, Build, and Deploy | Modul 01 - Lab2.2 Senior Project
+name: Contoh Action Dasar
 
-on:
-  push:
-    branches: [main]
+on: [push]
 
 jobs:
-  test-build:
-    runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        node-version: [20.x]
-
+  tugas-pertama-saya:
+    runs-on: ubuntu-latest 
+    
     steps:
-      - uses: actions/checkout@v4
-      - name: Testing Build pre-Deploy
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node-version }}
-          cache: "npm"
-      - run: npm i
-      - run: npm run build
-  deploy:
-    needs: test-build
-    runs-on: ubuntu-latest
-
-    strategy:
-       matrix:
-          node-version: [20.x]
-
-    steps:
-      - name: Build app on VM
-        uses: appleboy/ssh-action@master
-        with:
-            host: ${{ secrets.HOST }}
-            username: ${{ secrets.USERNAME }}
-            password: ${{ secrets.PASSWORD }}
-            port: ${{ secrets.PORT }}
-            script: |
-                eval "$(ssh-agent -s)"
-                ssh-add ~/.ssh/ssh-praktikan69
-                echo "Cek folder project";
-                [ ! -d "${HOME}/senpro/540158/modul02/senpro-github-action/" ] &&
-                    {
-                        echo "Repository belum di-clone. Cloning...";
-                        mkdir -p ~/senpro/540158/modul02;
-                        cd ~/senpro/540158/modul02;
-                        git clone https://github.com/RakanSewon/senpro-github-action.git;
-                        cd ~/senpro/540158/modul02/senpro-github-action;
-                        echo "Install Package dan Build Project";
-                        npm install;
-                        npm run build;
-                    } ||
-                    {
-                        echo "Repository sudah ada. Building...";
-                        cd ~/senpro/540158/modul02/senpro-github-action;
-                        git restore .;
-                        git pull origin main;
-                        echo "Install Package dan Build Project";
-                        npm install;
-                        npm run build;
-                    }
+      - name: Mencetak pesan sapaan
+        run: echo "Hello."
+        
+      - name: Menampilkan tanggal dan waktu server
+        run: date

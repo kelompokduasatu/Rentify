@@ -3,7 +3,7 @@ name: Temporary Action For Rentify
 on: [push]
 
 jobs:
-  tugas-pertama-saya:
+  action-test:
     runs-on: ubuntu-latest 
     
     steps:

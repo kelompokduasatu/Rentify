@@ -32,3 +32,43 @@ jobs:
 
       - name: Run build
         run: npm run build
+
+  build-backend:
+    name: Build backend (Express + Prisma)
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Node 22.x, bukan 20.x seperti job frontend: hasil `tsc` backend adalah
+      # CommonJS yang mem-require() paket ESM-only (@auth/express), dan
+      # require(esm) baru tersedia tanpa flag di Node >= 20.19 / >= 22.12.
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+          cache: "npm"
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Wajib sebelum build: tanpa ini @prisma/client belum punya tipe hasil
+      # generate (UserRole, Prisma.PrismaClientKnownRequestError) dan tsc gagal.
+      # DATABASE_URL diisi nilai dummy sebagai pengaman saja — `prisma generate`
+      # tidak konek ke database dan (per Prisma 6.19) tetap sukses tanpa
+      # variabel ini; nilainya ada supaya job tidak mendadak gagal kalau versi
+      # Prisma berikutnya memvalidasi blok datasource lebih ketat.
+      - name: Generate Prisma Client
+        run: npx prisma generate
+        env:
+          DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci?schema=public"
+          DIRECT_URL: "postgresql://ci:ci@localhost:5432/ci?schema=public"
+
+      - name: Run build
+        run: npm run build

@@ -1,22 +1,21 @@
+import "dotenv/config";
 import express from "express";
-import cors from "cors";
-import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
+import cors from "cors";
 import { ExpressAuth } from "@auth/express";
-import { authConfig } from "./config/auth.config";
-import { requireAuth, requireRole } from "./middlewares/auth.middleware";
-import { authenticateDummyUser, DUMMY_USERS } from "./config/dummyUsers";
-
-dotenv.config();
+import { authConfig } from "./lib/auth";
+import { requireRole } from "./middleware/requireRole";
+import { authRoutes } from "./routes/authRoutes";
 
 const app = express();
-const PORT = process.env.PORT || 5000;
-const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
+const PORT = Number(process.env.PORT ?? 4000);
+const CORS_ORIGIN = process.env.CORS_ORIGIN ?? "http://localhost:3000";
 
-// Middlewares
+app.set("trust proxy", true);
+
 app.use(
   cors({
-    origin: FRONTEND_URL,
+    origin: CORS_ORIGIN.split(",").map((o) => o.trim()),
     credentials: true,
   })
 );
@@ -24,83 +23,54 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// 1. Auth.js Route Handler (Mendukung /api/auth/signin, /api/auth/callback, /api/auth/session, dll)
-app.use("/api/auth/*", ExpressAuth(authConfig));
-
-// 2. Info Route Utama
-app.get("/", (req, res) => {
+app.get("/", (_req, res) => {
   res.json({
-    name: "Rentify Express Backend API",
-    status: "Running",
-    version: "1.0.0",
-    dummyAccountsForTesting: DUMMY_USERS.map((u) => ({
-      email: u.email,
-      password: "password123",
-      role: u.role,
-      name: u.name,
-    })),
+    success: true,
+    message: "Rentify Backend API — modul Autentikasi.",
     endpoints: {
-      authJS: "/api/auth/*",
-      testDummyLogin: "POST /api/test-login",
-      protectedRoute: "GET /api/protected",
-      adminProtectedRoute: "GET /api/admin/protected",
+      register: "POST /api/auth/register",
+      me: "GET /api/auth/me",
+      signIn: "GET /api/auth/signin",
+      signInGoogle: "GET /api/auth/signin/google",
+      credentialsCallback: "POST /api/auth/callback/credentials",
+      session: "GET /api/auth/session",
+      signOut: "POST /api/auth/signout",
+      hostPing: "GET /api/host/ping",
+      guestPing: "GET /api/guest/ping",
     },
   });
 });
 
-// 3. Endpoint Pengujian Direct Dummy Login (Untuk memverifikasi kredensial dummy tanpa browser)
-app.post("/api/test-login", async (req, res) => {
-  const { email, password } = req.body;
-
-  if (!email || !password) {
-    return res.status(400).json({
-      success: false,
-      message: "Email dan password wajib diisi.",
-    });
-  }
-
-  const user = await authenticateDummyUser(email, password);
-
-  if (!user) {
-    return res.status(401).json({
-      success: false,
-      message: "Email atau password dummy salah.",
-    });
-  }
-
-  return res.json({
-    success: true,
-    message: "Login dummy berhasil!",
-    user,
-    note: "Untuk sesi lengkap Auth.js di browser/Next.js, gunakan endpoint /api/auth/signin/credentials",
-  });
+app.get("/health", (_req, res) => {
+  res.json({ success: true, message: "Server sehat." });
 });
 
-// 4. Protected Route (Semua user terautentikasi)
-app.get("/api/protected", requireAuth, (req, res) => {
+app.use("/api/auth", authRoutes);
+app.use("/api/auth/*", ExpressAuth(authConfig));
+
+app.get("/api/host/ping", requireRole("HOST", "ADMIN"), (_req, res) => {
   const session = res.locals.session;
   res.json({
     success: true,
-    message: "Selamat datang! Anda berhasil mengakses endpoint terproteksi.",
+    message: "Halo Host! Anda berhasil mengakses endpoint khusus Host.",
     user: session.user,
   });
 });
 
-// 5. Protected Admin Route (Hanya role ADMIN)
-app.get("/api/admin/protected", requireAuth, requireRole("ADMIN"), (req, res) => {
+app.get("/api/guest/ping", requireRole("GUEST", "ADMIN"), (_req, res) => {
   const session = res.locals.session;
   res.json({
     success: true,
-    message: "Selamat datang Admin! Anda memiliki akses khusus ke endpoint ini.",
+    message: "Halo Guest! Anda berhasil mengakses endpoint khusus Guest.",
     user: session.user,
   });
 });
 
-// Start Server
+app.use((_req, res) => {
+  res.status(404).json({ success: false, message: "Endpoint tidak ditemukan." });
+});
+
 app.listen(PORT, () => {
-  console.log(`====================================================`);
-  console.log(`🚀 Rentify Backend Server running at http://localhost:${PORT}`);
-  console.log(`🔐 Auth.js routes available at http://localhost:${PORT}/api/auth/*`);
-  console.log(`🧪 Test dummy accounts: admin@rentify.com / password123`);
-  console.log(`====================================================`);
+  console.log(`Rentify backend berjalan di http://localhost:${PORT}`);
+  console.log(`Auth.js terpasang di http://localhost:${PORT}/api/auth/*`);
 });

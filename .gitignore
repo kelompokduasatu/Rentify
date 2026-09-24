@@ -47,3 +47,9 @@ next-env.d.ts
 
 # backend build output
 /backend/dist
+
+# markdown
+CLAUDE.md
+ARSITEKTUR.md
+BE.md
+AGENT.md

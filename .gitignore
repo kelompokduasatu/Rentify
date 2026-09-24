@@ -49,7 +49,5 @@ next-env.d.ts
 /backend/dist
 
 # markdown
-CLAUDE.md
 ARSITEKTUR.md
 BE.md
-AGENT.md

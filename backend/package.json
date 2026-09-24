@@ -1,0 +1,33 @@
+{
+  "name": "rentify-backend",
+  "version": "1.0.0",
+  "description": "Express backend with Auth.js and Prisma for Rentify",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "prisma:generate": "prisma generate"
+  },
+  "dependencies": {
+    "@auth/core": "^0.37.0",
+    "@auth/express": "^0.5.0",
+    "@auth/prisma-adapter": "^2.7.0",
+    "@prisma/client": "^6.4.0",
+    "bcrypt": "^5.1.1",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^5.0.2",
+    "@types/cookie-parser": "^1.4.8",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.13.0",
+    "prisma": "^6.4.0",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.7.3"
+  }
+}

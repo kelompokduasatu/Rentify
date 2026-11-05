@@ -1,4 +1,4 @@
-// Skema Prisma modul Autentikasi Rentify.
+// Skema Prisma modul Autentikasi dan Rental Rentify.
 // Model Account/Session/VerificationToken mengikuti persis skema resmi
 // @auth/prisma-adapter — jangan ubah nama kolom/tipe di sana.
 
@@ -44,9 +44,16 @@ model User {
   accounts Account[]
   sessions Session[]
 
+  // Relasi sesuai ERD
+  vehicles         Vehicle[]         // USERS ||--o{ VEHICLES : mendaftarkan (sebagai Host)
+  bookingsAsGuest  Booking[]         // USERS ||--o{ BOOKINGS : menyewa (sebagai Guest)
+  reviewsGiven     Review[]          // USERS ||--o{ REVIEWS : memberikan / menerima
+
   // createdAt sengaja TANPA @updatedAt supaya nilainya tidak ikut berubah saat update
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@map("users")
 }
 
 model Account {
@@ -66,6 +73,7 @@ model Account {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
+  @@map("accounts")
 }
 
 // Tetap ada demi kompatibilitas @auth/prisma-adapter.
@@ -76,6 +84,8 @@ model Session {
   userId       String
   expires      DateTime
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
 }
 
 model VerificationToken {
@@ -84,4 +94,89 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ==========================================
+// MODUL RENTAL & OPERASIONAL (SESUAI ERD)
+// ==========================================
+
+model Vehicle {
+  id                  Int       @id @default(autoincrement())
+  host_id             String
+  merk_model          String
+  harga_per_hari      Int
+  status_ketersediaan String
+
+  host     User      @relation(fields: [host_id], references: [id], onDelete: Cascade)
+  bookings Booking[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("vehicles")
+}
+
+model Booking {
+  id              Int      @id @default(autoincrement())
+  guest_id        String
+  vehicle_id      Int
+  tanggal_mulai   DateTime @db.Date
+  tanggal_selesai DateTime @db.Date
+  status_booking  String
+
+  guest            User              @relation(fields: [guest_id], references: [id], onDelete: Cascade)
+  vehicle          Vehicle           @relation(fields: [vehicle_id], references: [id], onDelete: Cascade)
+  payment          Payment?
+  conditionReports ConditionReport[]
+  reviews          Review[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("bookings")
+}
+
+model Payment {
+  id                Int      @id @default(autoincrement())
+  booking_id        Int      @unique
+  jumlah_bayar      Int
+  status_pembayaran String
+
+  booking Booking @relation(fields: [booking_id], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("payments")
+}
+
+model ConditionReport {
+  id           Int      @id @default(autoincrement())
+  booking_id   Int
+  tipe_laporan String
+  foto_url     String
+
+  booking Booking @relation(fields: [booking_id], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("condition_reports")
+}
+
+model Review {
+  id          Int      @id @default(autoincrement())
+  booking_id  Int
+  reviewer_id String
+  rating      Int
+  testimoni   String
+
+  booking  Booking @relation(fields: [booking_id], references: [id], onDelete: Cascade)
+  reviewer User    @relation(fields: [reviewer_id], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("reviews")
 }

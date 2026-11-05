@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 
+const BACKEND_URL = "http://localhost:5000";
+
 interface UserSession {
   id: string;
   name: string;
@@ -15,15 +17,8 @@ export default function LoginPage() {
   const [password, setPassword] = useState("password123");
   const [loading, setLoading] = useState(false);
   const [backendStatus, setBackendStatus] = useState<"checking" | "online" | "offline">("checking");
-  const [responseLog, setResponseLog] = useState<any>(null);
+  const [responseLog, setResponseLog] = useState<Record<string, unknown> | null>(null);
   const [currentUser, setCurrentUser] = useState<UserSession | null>(null);
-
-  const BACKEND_URL = "http://localhost:5000";
-
-  // Periksa koneksi ke Backend Express saat komponen dimuat
-  useEffect(() => {
-    checkBackendHealth();
-  }, []);
 
   const checkBackendHealth = async () => {
     setBackendStatus("checking");
@@ -38,6 +33,27 @@ export default function LoginPage() {
       setBackendStatus("offline");
     }
   };
+
+  // Periksa koneksi ke Backend Express saat komponen dimuat
+  useEffect(() => {
+    let ignore = false;
+
+    fetch(`${BACKEND_URL}/`)
+      .then((res) => {
+        if (!ignore) {
+          setBackendStatus(res.ok ? "online" : "offline");
+        }
+      })
+      .catch(() => {
+        if (!ignore) {
+          setBackendStatus("offline");
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   const fillPreset = (presetEmail: string) => {
     setEmail(presetEmail);
@@ -66,10 +82,14 @@ export default function LoginPage() {
       } else {
         setCurrentUser(null);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Gagal terhubung ke backend Express di port 5000";
       setResponseLog({
         status: "Error",
-        message: err.message || "Gagal terhubung ke backend Express di port 5000",
+        message,
       });
       setCurrentUser(null);
     } finally {
@@ -97,8 +117,11 @@ export default function LoginPage() {
           : "Akses Ditolak",
         data,
       });
-    } catch (err: any) {
-      setResponseLog({ status: "Error", message: err.message });
+    } catch (err: unknown) {
+      setResponseLog({
+        status: "Error",
+        message: err instanceof Error ? err.message : "Terjadi kesalahan",
+      });
     } finally {
       setLoading(false);
     }

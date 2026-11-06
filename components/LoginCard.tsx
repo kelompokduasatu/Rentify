@@ -1,4 +1,5 @@
 import React from "react";
+import Link from "next/link";
 
 interface LoginCardProps {
   email: string;
@@ -110,12 +111,12 @@ export default function LoginCard({
             Don&apos;t have an account?
           </p>
           <div className="mt-4 text-center">
-            <a
-              href="#"
+            <Link
+              href="/register"
               className="text-xs font-semibold text-[#135d54] hover:underline"
             >
               Sign up
-            </a>
+            </Link>
           </div>
         </div>
       </form>

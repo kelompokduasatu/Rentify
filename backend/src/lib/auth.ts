@@ -35,7 +35,7 @@ class InvalidCredentials extends AuthError {
 // dibatasi panjang minimum: aturan panjang hanya berlaku saat registrasi,
 // login cukup mencocokkan apa adanya.
 const credentialsSchema = z.object({
-  email: z.email(),
+  email: z.string().email(),
   password: z.string().min(1),
 });
 

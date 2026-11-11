@@ -1,15 +1,20 @@
 import { Router } from "express";
-import { Prisma } from "@prisma/client";
+import { Prisma, VerificationStatus } from "@prisma/client";
 import bcrypt from "bcrypt";
 import { z } from "zod";
 import { getAuthSession } from "../lib/auth";
+import {
+  createLivenessToken,
+  verifyFaceLiveness,
+  verifyLivenessToken,
+} from "../lib/liveness";
 import { prisma } from "../lib/prisma";
 
 export const authRoutes = Router();
 
 const BCRYPT_COST = 12;
 
-const registerSchema = z.object({
+const registerCredentialsSchema = z.object({
   name: z
     .string({ required_error: "Nama wajib diisi." })
     .trim()
@@ -38,12 +43,171 @@ const registerSchema = z.object({
     .optional(),
 });
 
+const registerSchema = registerCredentialsSchema.extend({
+  livenessToken: z
+    .string({
+      required_error:
+        "Verifikasi wajah (face liveness) wajib dilakukan sebelum registrasi.",
+    })
+    .trim()
+    .min(
+      1,
+      "Verifikasi wajah (face liveness) wajib dilakukan sebelum registrasi."
+    )
+    .refine((token) => verifyLivenessToken(token), {
+      message:
+        "Token verifikasi wajah tidak valid atau sudah kedaluwarsa. Silakan ulangi pemindaian wajah.",
+    }),
+});
+
+const livenessDummySchema = z
+  .object({
+    imageBase64: z.string().optional(),
+    sessionData: z.unknown().optional(),
+  })
+  .optional();
+
+/**
+ * POST /api/auth/validate-register
+ * Pra-validasi kredensial registrasi dan pengecekan ketersediaan email
+ * sebelum antarmuka memunculkan pemindai wajah (webcam).
+ */
+authRoutes.post("/validate-register", async (req, res) => {
+  const hasil = registerCredentialsSchema.safeParse(req.body);
+
+  if (!hasil.success) {
+    res.status(400).json({
+      success: false,
+      message: "Data registrasi tidak valid.",
+      errors: hasil.error.flatten().fieldErrors,
+    });
+    return;
+  }
+
+  const { email } = hasil.data;
+
+  try {
+    const sudahAda = await prisma.user.findUnique({ where: { email } });
+    if (sudahAda) {
+      res.status(409).json({
+        success: false,
+        message: "Email sudah terdaftar. Silakan login atau gunakan email lain.",
+        errors: {
+          email: ["Email sudah terdaftar. Silakan login atau gunakan email lain."],
+        },
+      });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Kredensial valid dan email tersedia. Lanjutkan ke verifikasi wajah.",
+    });
+  } catch (error) {
+    console.error("[POST /api/auth/validate-register]", error);
+    res.status(500).json({
+      success: false,
+      message: "Terjadi kesalahan pada server saat memvalidasi data registrasi.",
+    });
+  }
+});
+
+/**
+ * POST /api/auth/verify-liveness-dummy
+ * Endpoint untuk memvalidasi frame liveness dari webcam (dummy placeholder).
+ * Kedepannya isi `verifyFaceLiveness()` akan digantikan dengan Azure Face Liveness API.
+ */
+authRoutes.post("/verify-liveness-dummy", async (req, res) => {
+  const parsed = livenessDummySchema.safeParse(req.body);
+
+  if (!parsed.success) {
+    res.status(400).json({
+      success: false,
+      message: "Payload verifikasi wajah tidak valid.",
+      errors: parsed.error.flatten().fieldErrors,
+    });
+    return;
+  }
+
+  try {
+    const result = await verifyFaceLiveness(parsed.data);
+
+    if (!result.valid || result.status !== "VALID") {
+      res.status(422).json({
+        success: false,
+        status: "INVALID",
+        message: "Verifikasi keaslian wajah gagal. Silakan coba lagi.",
+      });
+      return;
+    }
+
+    const { token: livenessToken, expiresAt } = createLivenessToken();
+
+    res.status(200).json({
+      success: true,
+      status: result.status,
+      message: "Verifikasi keaslian wajah berhasil.",
+      livenessToken,
+      expiresAt,
+      verification: result,
+    });
+  } catch (error) {
+    console.error("[POST /api/auth/verify-liveness-dummy]", error);
+    res.status(500).json({
+      success: false,
+      message: "Terjadi kesalahan pada server saat memverifikasi wajah.",
+    });
+  }
+});
+
 /**
  * POST /api/auth/register
- * Registrasi akun baru. Tidak otomatis membuat sesi — frontend memanggil
- * signIn() Auth.js setelah respons 201.
+ * Registrasi akun baru setelah lolos verifikasi Face Liveness.
+ * Tidak otomatis membuat sesi — frontend memanggil signIn() Auth.js setelah respons 201.
  */
 authRoutes.post("/register", async (req, res) => {
+  // Mendukung mode dryRun (?dryRun=true) untuk pra-validasi kredensial sebelum webcam
+  if (req.query.dryRun === "true") {
+    const dryRunResult = registerCredentialsSchema.safeParse(req.body);
+    if (!dryRunResult.success) {
+      res.status(400).json({
+        success: false,
+        message: "Data registrasi tidak valid.",
+        errors: dryRunResult.error.flatten().fieldErrors,
+      });
+      return;
+    }
+
+    try {
+      const sudahAda = await prisma.user.findUnique({
+        where: { email: dryRunResult.data.email },
+      });
+      if (sudahAda) {
+        res.status(409).json({
+          success: false,
+          message:
+            "Email sudah terdaftar. Silakan login atau gunakan email lain.",
+        });
+        return;
+      }
+
+      res.status(200).json({
+        success: true,
+        message:
+          "Kredensial valid dan email tersedia. Lanjutkan ke verifikasi wajah.",
+      });
+      return;
+    } catch (error) {
+      console.error("[POST /api/auth/register?dryRun=true]", error);
+      res.status(500).json({
+        success: false,
+        message:
+          "Terjadi kesalahan pada server saat memvalidasi data registrasi.",
+      });
+      return;
+    }
+  }
+
   const hasil = registerSchema.safeParse(req.body);
 
   if (!hasil.success) {
@@ -71,14 +235,28 @@ authRoutes.post("/register", async (req, res) => {
     const passwordHash = await bcrypt.hash(password, BCRYPT_COST);
 
     const user = await prisma.user.create({
-      data: { name, email, passwordHash, role, phone },
+      data: {
+        name,
+        email,
+        passwordHash,
+        role,
+        phone,
+        verificationStatus: VerificationStatus.VERIFIED,
+      },
       // select eksplisit — passwordHash tidak boleh ikut keluar.
-      select: { id: true, name: true, email: true, role: true, createdAt: true },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        verificationStatus: true,
+        createdAt: true,
+      },
     });
 
     res.status(201).json({
       success: true,
-      message: "Registrasi berhasil. Silakan login.",
+      message: "Registrasi dan verifikasi wajah berhasil. Silakan login.",
       user,
     });
   } catch (error) {
@@ -124,6 +302,7 @@ authRoutes.get("/me", async (req, res) => {
         name: session.user.name ?? null,
         email: session.user.email ?? null,
         role: session.user.role,
+        verificationStatus: session.user.verificationStatus,
         image: session.user.image ?? null,
       },
     });

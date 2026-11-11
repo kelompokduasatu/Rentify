@@ -94,6 +94,7 @@ export const authConfig: ExpressAuthConfig = {
           email: user.email,
           image: user.image,
           role: user.role,
+          verificationStatus: user.verificationStatus,
         };
         return hasil;
       },
@@ -107,16 +108,23 @@ export const authConfig: ExpressAuthConfig = {
       if (user) {
         token.id = user.id;
         token.role = (user as Partial<AuthUser>).role;
+        token.verificationStatus = (user as Partial<AuthUser>).verificationStatus;
       }
 
-      // Login Google lewat adapter tidak membawa `role` di objek user, jadi
-      // ambil sekali dari database lalu simpan di token.
-      if (typeof token.id === "string" && !token.role) {
+      // Login Google lewat adapter tidak membawa `role` / `verificationStatus`
+      // di objek user, jadi ambil sekali dari database lalu simpan di token.
+      if (
+        typeof token.id === "string" &&
+        (!token.role || !token.verificationStatus)
+      ) {
         const dbUser = await prisma.user.findUnique({
           where: { id: token.id },
-          select: { role: true },
+          select: { role: true, verificationStatus: true },
         });
-        if (dbUser) token.role = dbUser.role;
+        if (dbUser) {
+          token.role = dbUser.role;
+          token.verificationStatus = dbUser.verificationStatus;
+        }
       }
 
       return token;
@@ -127,6 +135,10 @@ export const authConfig: ExpressAuthConfig = {
       if (user) {
         if (typeof token.id === "string") user.id = token.id;
         if (token.role) user.role = token.role as AuthUser["role"];
+        if (token.verificationStatus) {
+          user.verificationStatus =
+            token.verificationStatus as AuthUser["verificationStatus"];
+        }
       }
       return session;
     },

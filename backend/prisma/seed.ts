@@ -1,5 +1,5 @@
 import bcrypt from "bcrypt";
-import { PrismaClient, UserRole } from "@prisma/client";
+import { PrismaClient, UserRole, VerificationStatus } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
@@ -17,11 +17,23 @@ async function main() {
   for (const u of DUMMY) {
     const user = await prisma.user.upsert({
       where: { email: u.email },
-      update: { name: u.name, role: u.role, phone: u.phone, passwordHash },
-      create: { ...u, passwordHash },
-      select: { id: true, email: true, role: true },
+      update: {
+        name: u.name,
+        role: u.role,
+        phone: u.phone,
+        passwordHash,
+        verificationStatus: VerificationStatus.VERIFIED,
+      },
+      create: {
+        ...u,
+        passwordHash,
+        verificationStatus: VerificationStatus.VERIFIED,
+      },
+      select: { id: true, email: true, role: true, verificationStatus: true },
     });
-    console.log(`  seed: ${user.email} (${user.role})`);
+    console.log(
+      `  seed: ${user.email} (${user.role}, ${user.verificationStatus})`
+    );
   }
 
   // Akun tanpa password, meniru user yang mendaftar lewat Google.

@@ -1,4 +1,4 @@
-import type { UserRole } from "@prisma/client";
+import type { UserRole, VerificationStatus } from "@prisma/client";
 
 export interface AuthUser {
   id: string;
@@ -6,6 +6,7 @@ export interface AuthUser {
   email?: string | null;
   image?: string | null;
   role: UserRole;
+  verificationStatus: VerificationStatus;
 }
 
 export interface AuthSession {
